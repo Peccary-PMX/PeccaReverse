@@ -2,7 +2,7 @@
 # text <- "file:///D:/these/Pecc_test/3_Models/1_Models/000_21_01_11_5ytype/cov_analsysis/Ref_without_cov_no_growth_estimElim_IL7onExpanHillIL7_10HigherEff4_IL750free2.mlxtran"
 # text <- "file:///D:/Peccary/Exemple_demo/ivivc.res"
 # text <- "file:///D:/these/Second_project/model_lidner.csv"
-
+# text <- "file:///D:/Peccary_Annexe/Exemple_demo/Brent_Monolix2021_model/DOX_SDM_L.mlxtran"
 # read.table("file:///D:/these/Second_project/model_lidner.csv", header = T, sep = ";",stringsAsFactors = F)
 # text <- "file:///D:/Peccary/Exemple_demo/run_nonmem/1_comp.res"
 # pecc_import_model(text)

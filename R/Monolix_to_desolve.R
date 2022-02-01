@@ -29,10 +29,12 @@
 # path_mxtran <- "file:///D:/these/Pecc_test/3_Models/1_Models/000_21_01_11_5ytype/model_rewrite_test/test5lowHostTPeak3RealEndbaselineHostT4.mlxtran"
 # demo <- monolix_to_desolve(path_mxtran)
 # path_model <- "file:///D:/these/presentations/code_sing.mlxtran";
+# path_mxtran <- "file:///D:/Peccary_Annexe/Exemple_demo/Brent_Monolix2021_model/DOX_SDM_L.mlxtran"
 #' @export
 monolix_to_desolve <- function(path_mxtran){
 
   output <- list()
+
   ### Find model file from mxtran
 
   path <-  path_mxtran %>%
@@ -42,7 +44,7 @@ monolix_to_desolve <- function(path_mxtran){
   root <- gsub( gsub(".+/", "", path), "", path)
   lines <- readLines(path)
 
-  file <- lines[grep("file = ", lines)]; file <- file[2] %>%
+  files <- lines[grep("file *= *", lines)]; file <- files[2] %>%
     gsub(pattern = "(file =)|(')|( )",replacement =  "")
 
   backwardpath <- sum(str_split(file, pattern = "/")[[1]] == "..")
@@ -59,8 +61,8 @@ monolix_to_desolve <- function(path_mxtran){
   ### Find dataset file from mxtran
 
 
-  dataset <- lines[grep("file = ", lines)]; dataset <- dataset[1] %>%
-    gsub(pattern = "(file =)|(')|( )",replacement =  "")
+   dataset <- files[1] %>%
+    gsub(pattern = "(file *=)|(')|( )",replacement =  "")
 
   backwardpath <- sum(str_split(dataset, pattern = "/")[[1]] == "..")
   bloc_root <- str_split(root, pattern = "/")[[1]]
@@ -74,11 +76,15 @@ monolix_to_desolve <- function(path_mxtran){
   # need separator
   delimiter <- gsub("(.+=)| ","",lines[grep("^delimiter *=", lines)])
   if(delimiter == "semicolon")  delimiter = ";"
-
+  if(delimiter == "comma")  delimiter = ","
+  if(delimiter == "space")  delimiter = " "
+  if(delimiter == "tab")  delimiter = "\t"
   #
 
   df <- read.table(path_dataset, header = T, sep = delimiter, na = ".") %>%
     as_tibble
+
+  names(df) <- gsub("ï..", "", names(df))
 
   lines[(grep( "\\[CONTENT\\]" , lines)+1):(grep("<MODEL>", lines) -1)] %>%
     as_tibble %>%
@@ -137,8 +143,8 @@ monolix_to_desolve <- function(path_mxtran){
 
     readLines(paste0(pathResult, "/summary.txt" )) -> linesRes
 
-    if(length(grep("CORRELATION MATRIX", linesRes))>0) linesRes <-
-      linesRes[1:grep("CORRELATION MATRIX", linesRes)]
+    if(length(grep("correlation *matrix", tolower(linesRes)))>0) linesRes <-
+      linesRes[1:grep("correlation *matrix", tolower(linesRes))]
 
     linesRes[grep("_pop", linesRes)] %>%
       as_tibble %>%
@@ -228,6 +234,41 @@ monolix_to_desolve <- function(path_mxtran){
     }
   }
 
+# handle bioav (replace parametr name by BioAv_X, as used in Peccary)
+# Create a table to be used throughout the script
+
+  linewithBioAv <- model[grep("depot\\(.+, *p *=", model)]
+  BioAvtable <- tibble( cmt = character(), previous = character())
+    for(a in linewithBioAv){
+
+
+      nameCmt <- gsub(".+target *=", "", a)
+      nameCmt <- gsub(" *,.+","", nameCmt)
+
+        previous <- gsub(".+, *p *=", "", a)
+        previous <- gsub("(\\)| |,).+", "", previous)
+
+        BioAvtable <- BioAvtable %>%
+        add_row(cmt = nameCmt, previous = previous)
+
+    }
+
+  if(nrow(BioAvtable) >0){
+
+    # update the table with new name
+    BioAvtable <- BioAvtable %>%
+      rowid_to_column() %>%
+      mutate(new = paste0("BioAv_", rowid) ) %>%
+      select(-rowid)
+
+    #update param table
+    for(a in 1:nrow(BioAvtable)){
+    outputRes$Param[outputRes$Param == BioAvtable$previous[a]] <- BioAvtable$new[a]
+    }
+
+  }
+
+
   outputRes -> output[["res"]]
   #### Isolate working bloc
 
@@ -311,6 +352,14 @@ monolix_to_desolve <- function(path_mxtran){
     ) %>%
     table_input -> temp
 
+  # Handle Bioav
+
+  for(a in BioAvtable$cmt){
+
+    temp$F[temp$var == a][[1]] <- TRUE
+
+  }
+
   temp -> output[["input"]]
   ## Model analysis
 
@@ -343,6 +392,14 @@ monolix_to_desolve <- function(path_mxtran){
   baliseMonolix <- grep("<MONOLIX>"     , lines)
   blocInitialValues <- lines[(baliseParamer + 1 ):(baliseMonolix - 1)]
 
+  # handle bioav (replace parametr name by BioAv_X, as used in Peccary)
+  for(a in BioAvtable$previous){
+
+    blocInitialValues <- gsub(paste0(a, "_pop"), paste0(BioAvtable$new[BioAvtable$previous == a], "_pop"), blocInitialValues)
+    blocInitialValues <- gsub(paste0("omega_", a), paste0("omega_", BioAvtable$new[BioAvtable$previous == a]), blocInitialValues)
+
+  }
+
   ### theta
   blocInitialValues[grep("_pop *=", blocInitialValues)] %>%
     as_tibble() %>%
@@ -352,7 +409,9 @@ monolix_to_desolve <- function(path_mxtran){
     select(-value) %>%
     mutate(E = if_else(method == "FIXED", F, T)) %>%
     rename(Param = name, Value = ini, Distrib = method) %>%
-    mutate(Distrib = factor("logN", levels = c("logN", "Norm", "fix"))) %>%
+    mutate(Distrib = case_when(Distrib == "FIXED" ~ "fix",
+                               T ~ "logN")) %>%  # imperfect but enough for now....
+    mutate(Distrib = factor(Distrib, levels = c("logN", "Norm", "fix"))) %>%
     table_param -> initialvalues
 
 
@@ -360,7 +419,7 @@ monolix_to_desolve <- function(path_mxtran){
   initialvalues %>%
     full_join(output[["res"]][c(1:2)]) %>%
     mutate(Value = if_else(is.na(Value), Pop, Value)) %>%
-    select(-Pop) -> initialvalues
+    select(-Pop) %>% distinct() -> initialvalues
 
   initialvalues -> output[["values"]]
 
