@@ -30,6 +30,8 @@
 # demo <- monolix_to_desolve(path_mxtran)
 # path_model <- "file:///D:/these/presentations/code_sing.mlxtran";
 # path_mxtran <- "file:///D:/Peccary_Annexe/Exemple_demo/Brent_Monolix2021_model/DOX_SDM_L.mlxtran"
+
+path_mxtran <- "/User/Brent"
 #' @export
 monolix_to_desolve <- function(path_mxtran){
 
@@ -53,8 +55,11 @@ monolix_to_desolve <- function(path_mxtran){
   root2 <- bloc_root[1:(length(bloc_root) - backwardpath)] %>%
     paste(collapse = "/")
 
+
+
   path_model <-  paste(root2, gsub("\\.\\./","", file), sep  = "/")
 
+  if(!grepl(":/", path_model)) path_model <- paste0("/", path_model) #otherwise it won't work, especially on mac
 
   model <- readLines(path_model)
 
@@ -72,6 +77,12 @@ monolix_to_desolve <- function(path_mxtran){
 
   #patwhay
   path_dataset <-  paste(root, gsub("\\.\\./","", dataset), sep  = "/")
+
+  #otherwise it won't work, especially on mac ("User/..." instead of "/User/...")
+  if(!grepl(":/", path_dataset)) path_dataset <- paste0("/", path_dataset)
+
+  model <- readLines(path_model)
+
 
   # need separator
   delimiter <- gsub("(.+=)| ","",lines[grep("^delimiter *=", lines)])
