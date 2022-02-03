@@ -282,7 +282,7 @@ make_simulations <- function(parameter, model, states, events, times = seq(0,100
     for(a in toadd){
 
       model <- c(model, paste0("dPerf_", a, " <- 0"))
-      states <- add_row(states, Cmt = paste0("Perf_", a), t0 = 0)
+      states <- add_row(states, Cmt = paste0("Perf_", a), t0 = "0")
 
       linetemp <- grep(paste0("d", a, " *<-"), model)
       model[linetemp] <- paste0(model[linetemp], " + Perf_", a)
