@@ -77,7 +77,7 @@ ode_nonmem <- function(func = Lorenz, omega, parms  = parameters, y = state, mb_
     left_join(
       parms %>%
         filter(E != "Input") %>%
-        filter(Distrib != "fix") %>%
+        filter(Distrib != "NoVar") %>%
         rowid_to_column("eta")
     )
 
@@ -210,20 +210,20 @@ ode_nonmem <- function(func = Lorenz, omega, parms  = parameters, y = state, mb_
     parms %>%
       mutate(init = map2_chr(theta, Distrib, ~
         case_when(.y == "logN" ~ paste0("MU_",.x," = LOG(THETA(", .x,"))" ),
-                  .y %in% c("Norm","fix") ~ paste0("MU_",.x," = THETA(", .x,")" ),
-                  T == "fix" ~ "")
+                  .y %in% c("Norm","NoVar") ~ paste0("MU_",.x," = THETA(", .x,")" ),
+                  T == "NoVar" ~ "")
       )) %>%
       mutate(eta = if_else(!is.na(eta), paste0("+ ETA(", eta,")"), "")) %>%
       mutate(param = pmap_chr(list(Param, theta, eta, Distrib), function(Param, theta, eta, Distrib){
 
         case_when(Distrib == "logN" ~ paste0(Param, " = EXP(MU_", theta,")", eta ),
                   Distrib == "Norm" ~ paste0(Param, " = MU_", theta, eta ),
-                  Distrib == "fix" ~ paste0(Param, " = MU_", theta ),
+                  Distrib == "NoVar" ~ paste0(Param, " = MU_", theta ),
                   T ~ "")
 
       })) -> temp
 
-    lines <-  paste( paste0(temp$init, collapse = "\n"),
+    lines <-  paste( paste0(temp$init[!is.na(temp$init)], collapse = "\n"),
                      paste0(temp$param, collapse = "\n"), sep  = "\n\n")
 
 
