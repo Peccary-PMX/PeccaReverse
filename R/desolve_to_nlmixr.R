@@ -29,7 +29,7 @@
 #
 # output <- tibble(output = "test", YTYPE = NA, err_add = 0.1, err_prop = 0.3, export = T, rm = F)
 #'@export
-deSolve_to_nlmixr <- function(model, states, events, parameters, diagOmega, output){
+deSolve_to_nlmixr <- function(model, states, events, parameters, diagOmega, output, path_data = NULL, xcol = NULL, ycol = NULL){
 
   output$err_add <- as.double(gsub("F", "", output$err_add))
   output$err_prop <- as.double(gsub("F", "", output$err_prop))
@@ -43,13 +43,19 @@ parameters %>%
   pull(line) -> lineDistrib
 # parametersLines <- case_when(parameters$Distrib == "logN", "LogN", "a")
 errorlines <- ""
-if(output$err_prop > 0){
 
-  errorlines <-  paste0(errorlines, "prop.err <- c(0,", output$err_prop,", 1)")
+for(a in 1:nrow(output)){
+
+  line <- output %>%
+    slice(a)
+if(line$err_prop > 0){
+
+  errorlines <-  paste0(errorlines, "\nprop.err",a," <- ", line$err_prop)
 }
 
-if(output$err_add > 0){
-  errorlines <-  paste0(errorlines, "\nadd.err <- c(0,", output$err_add,", 1)")
+if(line$err_add > 0){
+  errorlines <-  paste0(errorlines, "\nadd.err", a, " <- ", line$err_add)
+}
 }
 
 namesdiagOmega <- names(diagOmega)
@@ -66,11 +72,20 @@ modeltemp <- gsub("(_output)|(_plot)", "", modeltemp)
 
 
 output %>%
-  mutate(line = case_when(err_add == 0 & err_prop >0 ~ paste0(output, " ~ prop(prop.err)"),
-                          err_add > 0 & err_prop == 0 ~ paste0(output, " ~ add(add.err)"),
-                          err_add > 0 & err_prop >0 ~ paste0(output, " ~ prop(prop.err) + add(add.err)"),
+  rowid_to_column() %>%
+  mutate(line = case_when(err_add == 0 & err_prop >0 ~ paste0(output, " ~ prop(prop.err", rowid,")"),
+                          err_add > 0 & err_prop == 0 ~ paste0(output, " ~ add(add.err", rowid,")"),
+                          err_add > 0 & err_prop >0 ~ paste0(output, " ~ prop(prop.err", rowid,") + add(add.err", rowid,")"),
                           T ~ "neederrormodel" )) %>%
-  pull(line) -> errorLine
+  pull(line) %>%
+  paste0(collapse = "\n")-> errorLine
+
+states %>%
+  # filter(t0 != "0") %>%
+  mutate(line = paste0(Cmt, "(0) = ", t0)) %>%
+  pull(line) %>%
+  paste0(collapse = "\n") ->linstats
+
 
 paste0("f <- function(){
        ini({\n",
@@ -80,16 +95,28 @@ paste0("f <- function(){
        "\n})
   model({\n",
        paste0(lineDistrib, collapse = "\n"),
+       "\n\n",linstats ,
        "\n\n",modeltemp,
        "\n\n",
        paste0(errorLine, collapse = "\n"),
        "\n})
 }\n") -> fcreation
 
-paste0(fcreation,
-       "d <- read.table(\"D:/Peccary/Exemple_demo/DATA/Theoph.txt\", header = T, sep = \";\")",
-       "\n\nfit.s <- nlmixr(f,d,est=\"saem\",control=saemControl(n.burn=500,n.em=500,print=50))\n
-saveRDS(fit.s, file = \"D:/Peccary/Exemple_demo/nlmixr_test/rmodelShiny.nlmixr\")")
+
+dataset <-  paste0("d <- read.table(\"",path_data , "\", header = T, sep = \";\")")
+
+addline <- output %>%
+  mutate(a = paste0("YTYPE == ", YTYPE, " ~ \"", output, "\"")) %>%
+  pull(a) %>%
+  paste0(collapse = ",\n")
+
+dataset <- paste0(dataset, " %>%\n mutate(YTYPE = case_when(", addline, "))")
+
+dataset <- paste0(dataset,  "%>%\n mutate(time = ", xcol , ", dv = ", ycol, ")" )
+
+paste0(fcreation, "\n",
+       dataset,
+       "\n\nfit.s <- nlmixr(f,d,est=\"saem\",control=saemControl(n.burn=500,n.em=500,print=50))")
 }
 
 #
