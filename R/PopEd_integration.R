@@ -268,6 +268,7 @@ parameters %>%
               rowid_to_column("nOmega")) %>%
   ## compute the eta relationship from theta
   mutate(eta = case_when(Distrib == "logN" & !is.na(nOmega) ~ paste0(" * exp(b[",nOmega,"])"),
+                         Distrib == "Norm" & !is.na(nOmega) ~ paste0(" + b[",nOmega,"]"),
                          T ~ "")) %>%
   # and write the complete line/formula of the parameter
   mutate(test = paste0(Param, " = ", "bpop[", nTheta,"]", eta))-> parameters2
@@ -504,7 +505,6 @@ groupsize <- parse_expr(paste0("c(", paste(OD_input %>%
                                              pull(nidgroup), collapse = ","),")"))
 # print("groupsize okay")
 
-print("aeza")
 ## And finally gather all this information into poped.db
 ## object (the most complex of PopEd)
 ex$poped <- expr(poped.db <- create.poped.database(ff_fun="model2",
@@ -521,7 +521,6 @@ ex$poped <- expr(poped.db <- create.poped.database(ff_fun="model2",
                                                     xt= !!xt,
                                                     model_switch = !!model_switch,
                                                     a = !!a))
-print("aeza")
 #ex$dumb5<- expr(print(poped.db))
 ex$output <- expr(popedResult <- list())
 

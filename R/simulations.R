@@ -609,6 +609,9 @@ ex$simulations  <- expr(simulations <-  parameters_df %>%
 
 }
 
+make_simulations_rxode(parameter = paramInd,model =  model_demo, states = states, events = events, times = c(seq(0,100,1)), Progress = F, returnExpr =F)
+
+
 #'@export
 make_simulations_rxode <- function(parameter, model, states, events, times = seq(0,100,1), error = NA, Progress = T, returnExpr = T){
 
@@ -1301,7 +1304,6 @@ return(plot_temp)
      }) -> plots
 
 
-  print(plots)
 
    if(length(plots) == 1){
 
