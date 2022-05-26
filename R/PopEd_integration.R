@@ -544,7 +544,6 @@ names <- c(names_par_est,
            names_omega_est, sigmas_names)
 # ex$rename <- expr(names(result_OD$rse)[1:!!length(names)] <- !! names)
 ex$names <- expr(names(popedResult$result_OD$rse) <- !! names)
-print("aeza")
 
 ex$final <- expr(popedResult)
 
@@ -554,10 +553,19 @@ ex <- map(ex, ~ parse_expr(deparse(.x, width.cutoff = 500) %>% paste0(collapse =
 ex <- expr({!!!ex})
 
 
-if(outputExpr == T) return(ex)
+if(outputExpr == T){
+  return(ex)
+
+}else if(outputExpr == F){
+
+  return(eval(ex, envir = globalenv()))
+}else{
+  print(ex)
+  return(eval(ex, envir = globalenv()))
+}
 # print(ex)
  # output$code <-ex
-return(eval(ex, envir = globalenv()))
+
 
 }
 

@@ -240,10 +240,10 @@ ex2 <- list()
 # # # # # #
 # parameter <- parameter %>% rename(BioAv = ka)
 # events <- tibble(Proto = c("1", "1:2"), var = c("Gut", "Gut"), time = c("1:24", "0"), value = 5:6, method = c("add", "add"), use = c(T,T), delete = c(F,F), tlag = F, ADM = "", F = F,
-               # Perf = c("rate", "time"), filterPlot = c("Dose == 50", "Dose ==100"), Perf_num = c(5,5)) %>%
+# Perf = c("rate", "time"), filterPlot = c("Dose == 50", "Dose ==100"), Perf_num = c(5,5)) %>%
 # slice(1:2)# time or rate
-# # model <- "dX <- X * Cl
-#  # conc_plot <- X/V"
+# model <- "dX <- X * Cl
+# conc_plot <- X/V"
 # states = tibble(Cmt = c("Gut", "Central"), t0 = "0")
 
 # model <- "
@@ -251,7 +251,7 @@ ex2 <- list()
 # Conc_plot <- ka/V * exp(- t * ke)"
 # parameters_dff
 # #
-# states = tibble(Cmt = "X", t0 = "0")
+# states = tibble(Cmt = "X", t0 = "0.1")
 # states = tibble(Cmt = "Central", t0 = "0")
 # error <- tibble(output = "conc", err_add = "0.3F", err_prop = "0.1")
 
@@ -609,20 +609,40 @@ ex$simulations  <- expr(simulations <-  parameters_df %>%
 
 }
 
-make_simulations_rxode(parameter = paramInd,model =  model_demo, states = states, events = events, times = c(seq(0,100,1)), Progress = F, returnExpr =F)
+# make_simulations_rxode(parameter = paramInd,model =  model_demo, states = states, events = events, times = c(seq(0,100,1)), Progress = F, returnExpr =F)
 
 
 #'@export
 make_simulations_rxode <- function(parameter, model, states, events, times = seq(0,100,1), error = NA, Progress = T, returnExpr = T){
 
 
+  # Add states different from 0 to model
 
+  whichnot0 <- which(as.character(states$t0) != "0")
+  for(a in whichnot0){
+
+    model <-  paste0(states$Cmt[[1]],"(0) <- ", states$t0[[1]]  ,"\n", model)
+
+
+  }
+
+  # Analyse the model
   transformeddmodel <- deSolve_pecc(model)
   # ind_param <- mtcars  %>% mutate(setPara = 1)
   # print("okay")
 
 
+  # number of proto
 
+  if("use" %in% names(events)){
+    events <- events %>%
+      filter(use == T) %>%
+      select(-starts_with("use"), - starts_with("delete"))
+  }
+
+  protonames <- map(events$Proto, ~eval(parse_expr(.x))) %>% reduce(c) %>% unique()
+
+  if(length(unique(protonames)) == 1) protonames <- ""
 
   if("data.frame" %in% class(parameter)){
 
@@ -632,11 +652,13 @@ make_simulations_rxode <- function(parameter, model, states, events, times = seq
     # nameparset: name of the model (for plotting after)
     # paramter: dataframe of parameter
     ex <- list()
-    ex$par <- expr(parameters_df <- !!substitute(parameter) %>% rownames_to_column("id") %>% group_by(id, nameparset) %>% nest(.key = "parameter"))
+    ex$par <- expr(parameters_df <- !!substitute(parameter) %>% crossing(Proto = !!protonames) %>% rownames_to_column("id")%>%
+                     mutate(id = as.double(id)))
 
   }else{
     ex <- parameter
-    ex$par <- expr(parameters_df <- ind_param %>% rownames_to_column("id") %>% group_by(id, nameparset) %>% nest(.key = "parameter"))
+    ex$par <- expr(parameters_df <- ind_param %>% crossing(Proto = !!protonames) %>% rownames_to_column("id")%>%
+                     mutate(id = as.double(id)))
 
   }
 
@@ -650,93 +672,142 @@ make_simulations_rxode <- function(parameter, model, states, events, times = seq
   # events <-
   # print("par")
 
-  # if we have equation differntial
-  if(length(transformeddmodel$state)>0){
-    ## events handling
 
-    if("use" %in% names(events)){
-      events <- events %>%
-        filter(use == T) %>%
-        select(-starts_with("use"), - starts_with("delete"))
+  ## events handling
+  events0 <- events
+  events <-
+    events %>%
+    select(Proto, var, time, value, method, ADM, Perf, starts_with("Perf_num")) %>%
+    mutate(var = as.character(var), method = as.character(method)) %>%
+    # mutate(var = paste0("(", var,")")) %>%
+    rename(amt = value, cmt = var) %>%
+    mutate(evid = 1)
+
+  if(sum("rate" %in% events$Perf) >0){
+
+    events <- events %>%
+      mutate(rate = if_else(Perf == "rate", as.double(Perf_num), NA_real_))
+
+  }
+
+  if(sum("time" %in% events$Perf) >0){
+
+    events <- events %>%
+      mutate(dur = if_else(Perf == "time", as.double(Perf_num), NA_real_))
+
+  }
+
+
+
+
+  events_expr <- expr(tibble(!!! map(events, ~ expr(!!.x))))
+
+
+
+  toobserv <- c(transformeddmodel$state, transformeddmodel$output_manual, transformeddmodel$toplot)
+  toobserv <- toobserv[toobserv != ""]
+
+
+
+  events_expr <- expr(!!events_expr %>%
+                        mutate(time = map(time, ~ eval(parse_expr(.x)))) %>%
+                        unnest(time))
+
+
+
+  # to unnest
+  if( max((events %>%
+           mutate(nmax = map_dbl(Proto, ~ length(eval(parse_expr(.x))))))$nmax) > 1){
+
+
+    events_expr <- expr(!!events_expr %>%
+                          mutate(Proto = map(Proto, ~ eval(parse_expr(.x)))) %>%
+                          unnest(Proto))
+
+  }
+
+
+
+  events_expr <- expr(!!events_expr %>%
+                        bind_rows(
+
+
+                          crossing(time = !!enexpr(times), evid = 0, cmt = !!toobserv[[1]], Proto = !!as.character(protonames))
+
+                        ))
+
+  events_expr <- expr(!!events_expr %>% crossing(id = unique(parameters_df$id)) %>%
+                    mutate(Proto = paste0( "Prot ", Proto )) %>%
+                      mutate(amt = as.double(amt), time = as.double(time)) )
+
+
+
+  ## tlag handling
+  if(sum(events0$tlag) > 0){
+
+
+    tlags <- which(events0$tlag == T)
+
+    for(a in tlags){
+
+      adm <-  events0$ADM[[a]]
+      adm <- if_else(adm == "", "1", as.character(adm))
+
+      tlagnamepar <- paste0("tlag_",adm)
+
+      events_expr <-  expr( !!events_expr %>%
+              left_join(parameters_df %>% select(id, !!parse_expr(tlagnamepar )) %>% mutate(ADM = !!adm)) %>%
+              mutate(time = time + if_else(is.na(!!parse_expr(tlagnamepar ) ),0,!!parse_expr(tlagnamepar )  )))
+
+
+
     }
-    # print("events")
-    # print(events)
-    # For label in plot
-    # events <- map_if(events %>% select(-F, -tlag, -Perf), is.factor,~ as.character(.x)) %>%
-    #          as.data.frame()
+  }
+
+  ## Bioavailability handling
+
+  if(sum(events0$F) > 0){
 
 
-    ## tlag handling
-    if(sum(events$tlag) > 0){
 
-      listtlag <- list()
+    bioav <- which(events0$F == T)
 
-      for(a in unique(events$ADM[events$tlag == T])){
+    for(a in bioav){
 
-        tlagnamepar <- paste0("tlag_", a) %>% gsub(pattern = "_$", replacement = "")
-        listtlag[[a]] <-  expr(events$time[which(events$ADM == !!a)] <- events$time[(events$ADM == !!a)] + parameter[[!!tlagnamepar]])
+      adm <-  events0$ADM[[a]]
+      adm <- if_else(adm == "", "1", as.character(adm))
 
-      }
-    }else{
-      listtlag <- NA
+      bioavnamepar <- paste0("BioAv_",adm)
+
+      events_expr <-  expr( !!events_expr %>%
+                              left_join(parameters_df %>% select(id, !!parse_expr(bioavnamepar )) %>% mutate(ADM = !!adm)) %>%
+                              mutate(amt = amt * if_else(is.na(!!parse_expr(bioavnamepar ) ),0,!!parse_expr(bioavnamepar )  )))
+
+
+
     }
+  }
 
-    ## Bioavailability handling
 
-    if(sum(events$F) > 0){
 
-      listBioAv <- list()
 
-      for(a in unique(events$ADM[events$F == T])){
 
-        bioavnamepar <- paste0("BioAv_", a) %>% gsub(pattern = "_$", replacement = "")
-        listBioAv[[a]] <-  expr(events$amt[which(events$ADM == !!a)] <- events$amt[which(events$ADM == !!a)] * parameter[[!!bioavnamepar]])
+  ex$events <-  expr(events_df <- !!events_expr%>%
+                       arrange(id, time) )
 
-      }
-    }else{
-      listBioAv <- NA
-    }
+
 
 
 
     ## r
 
 
-    events <-
-      events %>%
-      select(Proto, var, time, value, method, ADM, Perf, starts_with("Perf_num")) %>%
-      mutate(var = as.character(var), method = as.character(method)) %>%
-      # mutate(var = paste0("(", var,")")) %>%
-      rename(amt = value, cmt = var) %>%
-      mutate(evid = 1)
-
-
-   if(sum("rate" %in% events$Perf) >0){
-
-     events <- events %>%
-       mutate(rate = if_else(Perf == "rate", as.double(Perf_num), NA_real_))
-
-   }
-
-    if(sum("time" %in% events$Perf) >0){
-
-      events <- events %>%
-        mutate(dur = if_else(Perf == "time", as.double(Perf_num), NA_real_))
-
-    }
-
-
-    events_expr <- expr(tibble(!!! map(events, ~ expr(!!.x))))
 
 
 
 
 
 
-
-
-    toobserv <- c(transformeddmodel$state, transformeddmodel$output_manual, transformeddmodel$toplot)
-    toobserv <- toobserv[toobserv != ""]
 
 
 
@@ -744,84 +815,17 @@ make_simulations_rxode <- function(parameter, model, states, events, times = seq
     # several time or proto
 
 
-      events_expr <- expr(!!events_expr %>%
-                            mutate(time = map(time, ~ eval(parse_expr(.x)))) %>%
-                            unnest(time))
 
-
-
-    if( max((events %>%
-             mutate(nmax = map_dbl(Proto, ~ length(eval(parse_expr(.x))))))$nmax) > 1){
-
-
-      events_expr <- expr(!!events_expr %>%
-                            mutate(Proto = map(Proto, ~ eval(parse_expr(.x)))) %>%
-                            unnest(Proto))
-
-    }
-
-
-    # For plot labeling
-    if(length(unique(events$Proto)) == 1){
-      protolab = ""
-      events_expr  <- expr(!!events_expr  %>% mutate(Proto = ""))
-    }else{
-
-      protolab <- invoke(map(parse_exprs(events$Proto), ~ eval(.x)),.fn = c) %>% unique
-      protolab = paste0("Prot ", protolab)
-      events_expr  <-expr(!!events_expr  %>% mutate(Proto = paste0( "Prot ", Proto )))
-    }
-
-
-      events_expr <- expr(!!events_expr %>%
-                            bind_rows(
-
-                              crossing(time = !!enexpr(times), evid = 0, cmt = !!toobserv, Proto =  !!protolab)
-
-                            ) %>% arrange(time))
-
-    ex$events <-  expr(events_df <- !!events_expr   %>%
-                         mutate(amt = as.double(amt), time = as.double(time)) %>%
-                         group_by(Proto) %>%
-                         nest(.key = "events"))
-
-
-
-
-    ## states handling
-    # do we need to evaluate the initial value (ex = "kin/kout")
-    test_chara_states <- sum(is.na(as.double(states$t0)))
-
-    # if there is characeter and several initial values
-    # need to know how many parameters system we have we have...
-    # eval(parse_expr(deparse(ex$parameter) %>% paste0(collapse = " ") %>% gsub(pattern = ".+<-", replacement = "") %>%
-    # paste0(" %>% nrow"))) -> nparamatersset
-
-    # if we need to compute and several paramters set
-    if(test_chara_states > 0 ){ #& nparamatersset > 1
-
-      ex$states <- expr(states <- tibble(!!!map(states, ~ expr(!!.x))))
-
-      states2 <-   expr(states <- with(data = parameter, states %>%
-                                         mutate(t0 = map_dbl(t0, ~ eval(parse_expr(.x))))) %>%
-                          transmute(temp = paste0(Cmt, " = ", t0)) %>%
-                          pull(temp) %>%
-                          {paste0("c(",   reduce(., paste, sep = ", "), ")")} %>%
-                          parse_expr %>%
-                          eval)
-
-      ### if there are all value -> put actual values
-    }else if(test_chara_states == 0){ # & nparamatersset > 1
-
-      # ex$states <- expr(states <- tibble(!!!map(states %>% mutate(t0 = as.double(t0)), ~ expr(!!.x))))
-      ex$states <- expr( states <-   !!parse_expr(states %>%
-                                                    transmute(temp = paste0(Cmt, " = ", t0)) %>%
-                                                    pull(temp) %>%
-                                                    {paste0("c(",   reduce(., paste, sep = ", "), ")")}))
-
-      states2 <- NA
-    }
-  } ### end if differntial equation
+    # # For plot labeling
+    # if(length(unique(events$Proto)) == 1){
+    #   protolab = ""
+    #   events_expr  <- expr(!!events_expr  %>% mutate(Proto = ""))
+    # }else{
+    #
+    #   protolab <- invoke(map(parse_exprs(events$Proto), ~ eval(.x)),.fn = c) %>% unique
+    #   protolab = paste0("Prot ", protolab)
+    #   events_expr  <-expr(!!events_expr  %>% mutate(Proto = paste0( "Prot ", Proto )))
+    # }
 
 
 
@@ -830,72 +834,16 @@ make_simulations_rxode <- function(parameter, model, states, events, times = seq
 # textmodel[-c(length(textmodel),length(textmodel) - ]
 
   ex$model <- expr(model <- !!transformeddmodel$modelrxode)
-  # print("here")
-  # if(timesF == F) ex$time <- expr(times <- !!substitute(times))
-  # print("here")
-  ##
-
-  # & test_chara_states$test > 1
-  #### If several sets of parameters
-  # print("okay on commence les siulations")
-
-  if(Progress == T & length(transformeddmodel$state) >0){
-    ex$simulations <-  expr(
-      withProgress(message = 'Making simulations', value = 0, {
-        ysim <- 1
-        simmax <- nrow(parameters_df) * nrow(events_df)
-        simulations <- crossing(parameters_df, events_df ) %>%
-          mutate(simul = map2( parameter, events, function(parameter, events){
-
-
-            incProgress(1/simmax, detail = paste( ysim, "/", simmax))
-            ysim <<- ysim + 1
-            !!states2
-            !!!listtlag
-            !!!listBioAv
 
 
 
-            as_tibble(model$solve(parameter,  events,  states))
+    ex$simulations <-  expr(simulations <- as_tibble(model$solve(parameters_df %>% select(-nameparset, -Proto), events_df)) %>%
+                              mutate(securejoin = 1) %>%
+                              left_join(parameters_df %>% mutate(securejoin = 1)))
 
 
-
-          })) %>%
-          select(-parameter, -events) %>%
-          unnest }) )
-
-  }else if(Progress == F & length(transformeddmodel$state) >0){
-
-    # the exact same (copy/past) without the bar progression for shiny
-    ex$simulations <-  expr(
-
-      simulations <- crossing(parameters_df, events_df ) %>%
-        mutate(simul = map2( parameter, events, function(parameter, events){
-
-
-          !!states2
-          !!!listtlag
-          !!!listBioAv
-
-
-          as_tibble(model$solve(parameter,  events,  states))
-
-
-        })) %>%
-        select(-parameter, -events) %>%
-        unnest )
-
-
-  }else{
-
-    ex$simulations  <- expr(simulations <-  parameters_df %>%
-                              mutate(simul = map(parameter, ~  model(t = times, parameter = .x))) %>%
-                              select(-parameter)%>%
-                              unnest %>%
-                              mutate(Proto = "")
-    )
-  }
-
+    # %>%
+      # left_join(parameters_df)
   ## adding error
 
   if(!is.na(error[[1]])){

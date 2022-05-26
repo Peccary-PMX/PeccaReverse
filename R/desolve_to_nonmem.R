@@ -68,6 +68,8 @@
 
 ode_nonmem <- function(func = Lorenz, omega, parms  = parameters, y = state, mb_output , add_param ="",    mu_referencig = T, BLQ = F, datafile = "", outputcat = T,  ...){
 
+  if(is.character(func)) func <- deSolve_pecc(model_demo)$model
+
   blocs <- list()
 
   parms <- parms %>%

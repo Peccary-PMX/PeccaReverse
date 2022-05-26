@@ -41,6 +41,8 @@
 #' @export
 ode_monolix <- function(func = Lorenz,mb_output, parms  = parameters, y = state, depot = "C",  datafile = "",add_param ="",ytype = data.frame(), outputcat = T,...){
 
+  if(is.character(func)) func <- deSolve_pecc(model_demo)$model
+
   blocs <- list()
 
   init <- y
@@ -79,11 +81,11 @@ ode_monolix <- function(func = Lorenz,mb_output, parms  = parameters, y = state,
 
 
 
-  blocs$longitudinal <- "[LONGITUDINAL]"
+  blocs$longitudinal <- "[LONGITUDINAL]\n"
 
   #bloc input
 
-  blocs$input <- paste0("input ={", paste0(parms$Param, collapse = ", "),"}")
+  blocs$input <- paste0("input ={", paste0(parms$Param, collapse = ", "),"}\n")
 
   regressor <- parms %>% filter(E == "Input") %>% pull(Param)
 
@@ -116,7 +118,7 @@ ode_monolix <- function(func = Lorenz,mb_output, parms  = parameters, y = state,
 
   #bloc EQUATION iniital condition
 
-  blocs$equation1 <- paste0("EQUATION:
+  blocs$equation1 <- paste0("\nEQUATION:
          ; Initial conditions
          t0 = 0
          ",
@@ -199,7 +201,7 @@ ode_monolix <- function(func = Lorenz,mb_output, parms  = parameters, y = state,
   model_lines_3 <- model_lines_3 %>%
     gsub(pattern = "^ *",replacement =  "")
 
-  blocs$equation2 <- paste0( "; Dynamical model
+  blocs$equation2 <- paste0( "\n; Dynamical model
                              ",model_lines_3 %>%
                              paste0("\n") %>%
                              reduce(paste0))
