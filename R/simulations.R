@@ -621,7 +621,7 @@ make_simulations_rxode <- function(parameter, model, states, events, times = seq
   whichnot0 <- which(as.character(states$t0) != "0")
   for(a in whichnot0){
 
-    model <-  paste0(states$Cmt[[1]],"(0) <- ", states$t0[[1]]  ,"\n", model)
+    model <-  paste0(states$Cmt[[a]],"(0) <- ", states$t0[[a]]  ,"\n", model)
 
 
   }
