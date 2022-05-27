@@ -162,7 +162,7 @@ if(nrow(parameter) >1) ex$eta2 <- expr(eta <- apply(eta, 2, function(x) rep(x, n
 ex2 <- list()
 
 
-    ex2$theta <- expr(ind_param <- map_dfc( parameters, ~ rep(.x, !!n)))
+    ex2$theta <- expr(ind_param <- map_dfc( parameters, ~ rep(.x, !!n))  %>% arrange(nameparset))
 
     ## if there is only one eta, problem with names, so we have to handle that separately
     if(length(grep("logN" , parameter_df$Distrib)) > 0 & NCOL(matrix_eta) > 1){
@@ -653,12 +653,12 @@ make_simulations_rxode <- function(parameter, model, states, events, times = seq
     # paramter: dataframe of parameter
     ex <- list()
     ex$par <- expr(parameters_df <- !!substitute(parameter) %>% crossing(Proto = !!protonames) %>% rownames_to_column("id")%>%
-                     mutate(id = as.double(id)))
+                     mutate(id = as.double(id), Proto = paste0("Prot ", Proto)))
 
   }else{
     ex <- parameter
     ex$par <- expr(parameters_df <- ind_param %>% crossing(Proto = !!protonames) %>% rownames_to_column("id")%>%
-                     mutate(id = as.double(id)))
+                     mutate(id = as.double(id), Proto = paste0("Prot ", Proto)))
 
   }
 
@@ -736,8 +736,12 @@ make_simulations_rxode <- function(parameter, model, states, events, times = seq
 
                         ))
 
-  events_expr <- expr(!!events_expr %>% crossing(id = unique(parameters_df$id)) %>%
-                    mutate(Proto = paste0( "Prot ", Proto )) %>%
+  events_expr <- expr(!!events_expr %>% mutate(Proto = paste0("Prot ", Proto))%>%
+                        group_by(Proto) %>%
+                        nest() %>%
+                        full_join(parameters_df %>% select(id, Proto)) %>%
+                        unnest() %>%
+                        mutate(amt = as.double(amt),   time = as.double(time)) %>% arrange(id, time) %>%
                       mutate(amt = as.double(amt), time = as.double(time)) )
 
 
@@ -1154,9 +1158,9 @@ if(rmt0 == T) simulationname <- expr(!!simulationname %>% filter(time !=0))
                         gsub(pattern = \"\n\n\n?\" , replacement = \"\n\"))",
                         x$wrap == "Event" ~  "mutate(color = paste0( nameparset, \"\n\", key, \"\n\")%>%
                         gsub(pattern = \"\n\n\n?\" , replacement = \"\n\"))",
-                        x$wrap %in% c("OP", "O|P") ~  "rename(color =  Proto)",
-                        x$wrap %in% c("OE", "O|E") ~  "rename(color =  nameparset)",
-                        x$wrap %in% c("PE", "P|E") ~  "rename(color =  key)",
+                        x$wrap %in% c("OP", "O|P") ~  "mutate(color =  Proto)",
+                        x$wrap %in% c("OE", "O|E") ~  "mutate(color =  nameparset)",
+                        x$wrap %in% c("PE", "P|E") ~  "mutate(color =  key)",
                         x$wrap == "OPE" ~  "mutate(color = \"\")")
 
 
@@ -1164,15 +1168,15 @@ if(rmt0 == T) simulationname <- expr(!!simulationname %>% filter(time !=0))
 
         wrap_grid <- case_when(x$wrap == "None" ~ NA_character_,
                                                 x$wrap == "Output" ~  "facet_wrap(~key, scales = \"free\")",
-                                                x$wrap == "Param" ~  "facet_wrap(~fct_reorder(nameparset, as.double(id)), scales = \"free\")",
+                                                x$wrap == "Param" ~  "facet_wrap(~fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset)) ), scales = \"free\")",
                                                 x$wrap == "Event" ~  "facet_wrap(~Proto, scales = \"free\")",
                                                 x$wrap == "OP" ~  "facet_wrap(~paste0(nameparset, \"\n\", key), scales = \"free\")",
                                                 x$wrap == "OE" ~ "facet_wrap(~paste0(Proto, \"\n\", key), scales = \"free\")",
-                                                x$wrap == "PE" ~  "facet_wrap(~paste0(Proto, \"\n\", fct_reorder(nameparset, as.double(id))), scales = \"free\")",
-                                                x$wrap == "O|P" ~  "facet_grid(key~fct_reorder(nameparset, as.double(id)))",
+                                                x$wrap == "PE" ~  "facet_wrap(~paste0(Proto, \"\n\", fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset)))), scales = \"free\")",
+                                                x$wrap == "O|P" ~  "facet_grid(key~fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset))))",
                                                 x$wrap == "O|E" ~  "facet_grid(key~Proto)",
-                                                x$wrap == "P|E" ~  "facet_grid(fct_reorder(nameparset, as.double(id))~Proto)",
-                                                x$wrap == "OPE" ~  "facet_wrap(~paste0(Proto, \"\n\", fct_reorder(nameparset, as.double(id)), \"\n\", key), scales = \"free\")")
+                                                x$wrap == "P|E" ~  "facet_grid(fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset)))~Proto)",
+                                                x$wrap == "OPE" ~  "facet_wrap(~paste0(Proto, \"\n\", fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset))), \"\n\", key), scales = \"free\")")
 
         # wrap_grid <- case_when(x$wrap == "None" ~ NA_character_)
 
