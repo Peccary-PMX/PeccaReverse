@@ -19,6 +19,7 @@
 #'@param returnExpr booléen, wethere whe sould just return the expression or evaluate it
 #'@param matrixShiny is the matrix directly the matrix or just half of it
 #'@export
+
 random_etas <- function(n = 100, parameter_df = parameters_dff, matrix_eta = matrix_etas, sd = T, returnExpr = T, matrixShiny = T){
 
 
@@ -641,7 +642,7 @@ make_simulations_rxode <- function(parameter, model, states, events, times = seq
   }
 
   protonames <- map(events$Proto, ~eval(parse_expr(.x))) %>% reduce(c) %>% unique()
-
+  protonames <- paste0("Prot ", protonames)
   if(length(unique(protonames)) == 1) protonames <- ""
 
   if("data.frame" %in% class(parameter)){
@@ -653,14 +654,28 @@ make_simulations_rxode <- function(parameter, model, states, events, times = seq
     # paramter: dataframe of parameter
     ex <- list()
     ex$par <- expr(parameters_df <- !!substitute(parameter) %>% crossing(Proto = !!protonames) %>% rownames_to_column("id")%>%
-                     mutate(id = as.double(id), Proto = paste0("Prot ", Proto)))
+                     mutate(id = as.double(id)))
 
   }else{
     ex <- parameter
-    ex$par <- expr(parameters_df <- ind_param %>% crossing(Proto = !!protonames) %>% rownames_to_column("id")%>%
-                     mutate(id = as.double(id), Proto = paste0("Prot ", Proto)))
+    ex$par <- expr(parameters_df <- ind_param %>% crossing(Proto = !!protonames) %>% rownames_to_column("id") %>%
+                     mutate(id = as.double(id)))
 
   }
+
+print("rezr")
+  # if(length(unique(protonames)) == 1){
+  #
+  #   ex$par <- expr(!!ex$par %>%
+  #                    mutate(id = as.double(id)))
+  #
+  # }else{
+  #
+  #   ex$par <- expr(!!ex$par %>%
+  #                    mutate(id = as.double(id)))
+  #
+  # }
+
 
 
   ex$time <- expr(times <- !!enexpr(times))
@@ -702,7 +717,12 @@ make_simulations_rxode <- function(parameter, model, states, events, times = seq
 
   events_expr <- expr(tibble(!!! map(events, ~ expr(!!.x))))
 
+  if(length(unique(protonames)) == 1){
+    events_expr <- expr(!!events_expr %>% mutate(Proto = ""))
+  }else{
 
+    events_expr <- expr(!!events_expr %>% mutate(Proto = paste0("Prot ", Proto)))
+  }
 
   toobserv <- c(transformeddmodel$state, transformeddmodel$output_manual, transformeddmodel$toplot)
   toobserv <- toobserv[toobserv != ""]
@@ -736,10 +756,13 @@ make_simulations_rxode <- function(parameter, model, states, events, times = seq
 
                         ))
 
-  events_expr <- expr(!!events_expr %>% mutate(Proto = paste0("Prot ", Proto))%>%
+
+
+
+  events_expr <- expr(!!events_expr %>%
                         group_by(Proto) %>%
                         nest() %>%
-                        full_join(parameters_df %>% select(id, Proto)) %>%
+                        full_join(parameters_df %>% select(id, Proto) %>% mutate(Proto = as.character(Proto))) %>%
                         unnest() %>%
                         mutate(amt = as.double(amt),   time = as.double(time)) %>% arrange(id, time) %>%
                       mutate(amt = as.double(amt), time = as.double(time)) )
@@ -1239,8 +1262,8 @@ if(n > 0){
         # print("wrap_grid")
         # print(wrap_grid[1])
        if(!is.na(wrap_grid[1])) plot_temp <- expr(!!plot_temp + !!parse_expr(wrap_grid[1]) )
-        if(x$ylog == T) plot_temp <- expr(!!plot_temp + scale_y_log10() ) #limits = c(!!ymindisplayed , NA)
-       if(x$xlog == T) plot_temp <- expr(!!plot_temp + scale_x_log10() )
+        if(x$ylog[[1]] == T) plot_temp <- expr(!!plot_temp + scale_y_log10() ) #limits = c(!!ymindisplayed , NA)
+       if(x$xlog[[1]] == T) plot_temp <- expr(!!plot_temp + scale_x_log10() )
         # print("zzzz")
         # print( plotpoint$Plot)
         # print(x$Plot)

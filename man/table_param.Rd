@@ -4,7 +4,7 @@
 \alias{table_param}
 \title{nonmem_to_desolve}
 \usage{
-table_param(table)
+table_param(table = tibble(Param = character(), Value = character()))
 }
 \description{
 nonmem_to_desolve

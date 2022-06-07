@@ -4,7 +4,7 @@
 \alias{QSP_to_Peccary}
 \title{QSP to Peccary}
 \usage{
-QSP_to_Peccary(params)
+QSP_to_Peccary(params, outputExpr = T)
 }
 \description{
 

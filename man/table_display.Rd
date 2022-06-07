@@ -4,7 +4,7 @@
 \alias{table_display}
 \title{nonmem_to_desolve}
 \usage{
-table_display(possiblevalues)
+table_display(table = NULL, possiblevalues = NA_character_)
 }
 \description{
 nonmem_to_desolve

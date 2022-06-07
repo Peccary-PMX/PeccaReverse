@@ -6,6 +6,9 @@
 \usage{
 deSolve_pecc(model)
 }
+\arguments{
+\item{model}{The model written by the user}
+}
 \description{
-azeazezaezae
+Analyze simplified deSolve syntax to extract all informations
 }
