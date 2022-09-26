@@ -32,7 +32,7 @@
 #
 # mb_output <- tibble(output = "test", YTYPE = NA_integer_, err_add = "0.1",
 #                     err_prop = "0.3", export = TRUE, rm = FALSE)
-
+#
 # ode_nonmem(func = func, omega = omega, parms = parms, y = y, mb_output = mb_output )
 #' DeSolve pharmacometrics model creator
 #'
@@ -218,7 +218,7 @@ ode_nonmem <- function(func = Lorenz, omega, parms  = parameters, y = state, mb_
       mutate(eta = if_else(!is.na(eta), paste0("+ ETA(", eta,")"), "")) %>%
       mutate(param = pmap_chr(list(Param, theta, eta, Distrib), function(Param, theta, eta, Distrib){
 
-        case_when(Distrib == "logN" ~ paste0(Param, " = EXP(MU_", theta,")", eta ),
+        case_when(Distrib == "logN" ~ paste0(Param, " = EXP(MU_", theta, eta,")" ),
                   Distrib == "Norm" ~ paste0(Param, " = MU_", theta, eta ),
                   Distrib == "NoVar" ~ paste0(Param, " = MU_", theta ),
                   T ~ "")
