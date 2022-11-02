@@ -967,7 +967,7 @@ print("rezr")
 #'@param ytype_header name of the column YTYPE
 #'@param explo name of the dataset to use
 #'@export
-plot_simulations <- function(simulations, plot_table, plot_table_cov, xpoint = "", ypoint = "", n = 10, ymindisplayed = 0.0001, ymaxdisplayed = NA, ytype_header = character(), events = NULL, name_df = "explo", rmt0 = F, returnExpr = T){
+plot_simulations <- function(simulations, plot_table, plot_table_cov, xpoint = "", ypoint = "", n = 10, ymindisplayed = 0.0001, ymaxdisplayed = NA, ytype_header = character(), events = NULL, name_df = "explo", rmt0 = F, scalewrap = "free", returnExpr = T){
 
   # plottable <- mtcars
   # desolve <- expr(desolve)
@@ -1023,6 +1023,7 @@ if(rmt0 == T) simulationname <- expr(!!simulationname %>% filter(time !=0))
     ex$quantiles <-  expr(quantiles <-  !!simulationname %>%
                              mutate(nameparset = fct_inorder(nameparset)) %>%
                              gather(-id, -nameparset, -Proto, - time, key = "key", value = "value") %>%
+                            filter(key %in% c(!!!unique(plot_table$Todisplay))) %>%
                              group_by(time, key, nameparset, Proto) %>%
                              nest() %>%
                              crossing(tibble(q1 = seq(0.1,0.8,0.1),
@@ -1190,16 +1191,16 @@ if(rmt0 == T) simulationname <- expr(!!simulationname %>% filter(time !=0))
 
 
         wrap_grid <- case_when(x$wrap == "None" ~ NA_character_,
-                                                x$wrap == "Output" ~  "facet_wrap(~key, scales = \"free\")",
-                                                x$wrap == "Param" ~  "facet_wrap(~fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset)) ), scales = \"free\")",
-                                                x$wrap == "Event" ~  "facet_wrap(~Proto, scales = \"free\")",
-                                                x$wrap == "OP" ~  "facet_wrap(~paste0(nameparset, \"\n\", key), scales = \"free\")",
-                                                x$wrap == "OE" ~ "facet_wrap(~paste0(Proto, \"\n\", key), scales = \"free\")",
-                                                x$wrap == "PE" ~  "facet_wrap(~paste0(Proto, \"\n\", fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset)))), scales = \"free\")",
-                                                x$wrap == "O|P" ~  "facet_grid(key~fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset))))",
-                                                x$wrap == "O|E" ~  "facet_grid(key~Proto)",
-                                                x$wrap == "P|E" ~  "facet_grid(fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset)))~Proto)",
-                                                x$wrap == "OPE" ~  "facet_wrap(~paste0(Proto, \"\n\", fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset))), \"\n\", key), scales = \"free\")")
+                                                x$wrap == "Output" ~  paste0("facet_wrap(~key, scales =", scalewrap,")"),
+                                                x$wrap == "Param" ~  paste0("facet_wrap(~fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset)) ), scales =", scalewrap,")"),
+                                                x$wrap == "Event" ~  paste0("facet_wrap(~Proto, scales =", scalewrap,")"),
+                                                x$wrap == "OP" ~  paste0("facet_wrap(~paste0(nameparset, \"\n\", key), scales =", scalewrap,")"),
+                                                x$wrap == "OE" ~ paste0("facet_wrap(~paste0(Proto, \"\n\", key),  scales =", scalewrap,")"),
+                                                x$wrap == "PE" ~  paste0("facet_wrap(~paste0(Proto, \"\n\", fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset)))), scales =", scalewrap,")"),
+                                                x$wrap == "O|P" ~  paste0("facet_grid(key~fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset))),  scales =", scalewrap,")"),
+                                                x$wrap == "O|E" ~  paste0("facet_grid(key~Proto,  scales =", scalewrap,")"),
+                                                x$wrap == "P|E" ~  paste0("facet_grid(fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset)))~Proto,  scales =", scalewrap,")"),
+                                                x$wrap == "OPE" ~  paste0("facet_wrap(~paste0(Proto, \"\n\", fct_reorder(nameparset, as.double(gsub(\".+= *\", \"\", nameparset))), \"\n\", key), scales =", scalewrap,")"))
 
         # wrap_grid <- case_when(x$wrap == "None" ~ NA_character_)
 
