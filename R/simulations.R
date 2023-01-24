@@ -992,7 +992,7 @@ plot_simulations <- function(simulations, plot_table, plot_table_cov, xpoint = "
     simulationname <- expr(simulations)
   }
 
-if(rmt0 == T) simulationname <- expr(!!simulationname %>% filter(time !=0))
+
 
 
   if(ymindisplayed > 0){
@@ -1003,6 +1003,9 @@ if(rmt0 == T) simulationname <- expr(!!simulationname %>% filter(time !=0))
    }
 )
   }
+
+
+  if(rmt0 == T) simulationname <- expr(!!simulationname %>% filter(time !=0))
 
   # print("ymaxdisplayed")
   # print(ymaxdisplayed)
